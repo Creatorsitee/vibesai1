@@ -1,3 +1,5 @@
+import React from 'react';
+
 export interface PerformanceMetric {
   name: string;
   duration: number;
@@ -12,6 +14,71 @@ export interface PerformanceReport {
   averageRenderTime: number;
   peakMemoryUsage: number;
   totalExecutionTime: number;
+}
+
+/**
+ * Utility functions for performance optimization
+ */
+export class OptimizationUtils {
+  /**
+   * Debounce a function - wait until function stops being called before executing
+   * Useful for: input changes, window resize, search queries
+   */
+  static debounce<T extends (...args: any[]) => any>(
+    func: T,
+    wait: number
+  ): (...args: Parameters<T>) => void {
+    let timeout: NodeJS.Timeout | null = null;
+
+    return function debounced(...args: Parameters<T>) {
+      if (timeout) clearTimeout(timeout);
+      timeout = setTimeout(() => {
+        func(...args);
+        timeout = null;
+      }, wait);
+    };
+  }
+
+  /**
+   * Throttle a function - execute at most once every wait milliseconds
+   * Useful for: scroll events, mouse move, resize
+   */
+  static throttle<T extends (...args: any[]) => any>(
+    func: T,
+    wait: number
+  ): (...args: Parameters<T>) => void {
+    let lastRun = Date.now();
+
+    return function throttled(...args: Parameters<T>) {
+      const now = Date.now();
+      if (now - lastRun >= wait) {
+        func(...args);
+        lastRun = now;
+      }
+    };
+  }
+
+  /**
+   * Request idle callback with fallback
+   */
+  static requestIdleCallback(callback: () => void, options?: IdleRequestOptions): number {
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      return window.requestIdleCallback(callback, options);
+    }
+    // Fallback for browsers that don't support requestIdleCallback
+    return window.setTimeout(callback, 1) as unknown as number;
+  }
+
+  /**
+   * Cancel idle callback with fallback
+   */
+  static cancelIdleCallback(id: number): void {
+    if (typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
+      window.cancelIdleCallback(id);
+    } else {
+      window.clearTimeout(id);
+    }
+  }
 }
 
 export class PerformanceService {
