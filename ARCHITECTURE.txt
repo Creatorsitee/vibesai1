@@ -1,0 +1,228 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                   VibesAI Multi-Provider Architecture                      ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              USER INTERFACE                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Header: [AI Provider Selector] [Editor Mode] [Theme] [Settings]           │
+│          ↓                                                                  │
+│          ┌─────────────────────────────────┐                              │
+│          │ Provider Dropdown Menu           │                              │
+│          ├─────────────────────────────────┤                              │
+│          │ ✓ Claude 3.5 Sonnet (selected) │                              │
+│          │   Anthropic Claude              │                              │
+│          │ ◻ Gemini 2.0 Flash             │                              │
+│          │   Google Gemini                 │                              │
+│          └─────────────────────────────────┘                              │
+│                                                                             │
+│  Split View:                                                               │
+│  ┌──────────────────────────────┬────────────────────────────────────────┐ │
+│  │                              │          Chat Panel                     │ │
+│  │  Code Editor                 ├────────────────────────────────────────┤ │
+│  │  (Monaco)                    │  Messages:                              │ │
+│  │                              │  ┌──────────────────────────────────┐  │ │
+│  │                              │  │ User: "Write a function..."      │  │ │
+│  │                              │  └──────────────────────────────────┘  │ │
+│  │                              │  ┌──────────────────────────────────┐  │ │
+│  │                              │  │ Assistant: "Here's a solution..."│  │ │
+│  │                              │  └──────────────────────────────────┘  │ │
+│  │                              │                                         │ │
+│  │                              │  Input: [Type message...] [Send]        │ │
+│  │                              │                                         │ │
+│  └──────────────────────────────┼────────────────────────────────────────┘ │
+│  │                              │                                         │ │
+│  │  File Explorer               │  Live Preview / Output                 │ │
+│  │  - index.html                │  (HTML/CSS/JS Rendering)              │ │
+│  │  - style.css                 │                                         │ │
+│  │  - script.js                 │                                         │ │
+│  │                              │                                         │ │
+│  └──────────────────────────────┴────────────────────────────────────────┘ │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        SERVICE LAYER (TypeScript)                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐  │
+│  │              UnifiedAIService (Main Controller)                     │  │
+│  ├─────────────────────────────────────────────────────────────────────┤  │
+│  │                                                                     │  │
+│  │  getAvailableProviders()  →  ['gemini', 'claude']                 │  │
+│  │  setProvider()            →  Switch between providers              │  │
+│  │  getCurrentProvider()      →  Returns current provider             │  │
+│  │  generateContent()         →  Send message + get response          │  │
+│  │  generateContentStream()   →  Send message + stream response       │  │
+│  │                                                                     │  │
+│  │  ┌──────────────────────────────────────────────────────────────┐ │  │
+│  │  │ Internal Services:                                           │ │  │
+│  │  │ • ErrorService      - Error handling & logging              │ │  │
+│  │  │ • LoggingService    - Detailed operation logs              │ │  │
+│  │  │ • GeminiService     - Google API wrapper                  │ │  │
+│  │  │ • ClaudeService     - Anthropic API wrapper               │ │  │
+│  │  └──────────────────────────────────────────────────────────────┘ │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│  ┌──────────────────────────┐      ┌───────────────────────────────────┐  │
+│  │   GeminiService          │      │     ClaudeService                 │  │
+│  ├──────────────────────────┤      ├───────────────────────────────────┤  │
+│  │ API: @google/genai       │      │ API: Anthropic REST              │  │
+│  │ Model: gemini-2.0-flash  │      │ Model: claude-3-5-sonnet         │  │
+│  │ Max Tokens: 2048         │      │ Max Tokens: 2048                 │  │
+│  │ Speed: Very Fast ⚡⚡⚡  │      │ Speed: Fast ⚡⚡              │  │
+│  │ Cost: Free 🆓            │      │ Cost: Paid 💵                    │  │
+│  │                          │      │                                   │  │
+│  │ Features:                │      │ Features:                        │  │
+│  │ ✅ Streaming            │      │ ✅ Streaming                    │  │
+│  │ ✅ Code Analysis        │      │ ✅ Code Analysis                │  │
+│  │ ✅ Test Generation      │      │ ✅ Test Generation              │  │
+│  │ ✅ Retry Logic          │      │ ✅ Retry Logic                  │  │
+│  │ ✅ Error Handling       │      │ ✅ Error Handling               │  │
+│  │                          │      │                                   │  │
+│  └──────────────────────────┘      └───────────────────────────────────┘  │
+│           ▲                                  ▲                              │
+│           │                                  │                              │
+└───────────┼──────────────────────────────────┼──────────────────────────────┘
+            │                                  │
+            │      Provider Selection          │
+            │       Logic (Auto-detect)        │
+            │                                  │
+┌───────────┴──────────────────────────────────┴──────────────────────────────┐
+│                          EXTERNAL APIs                                      │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌──────────────────────────────┐      ┌───────────────────────────────┐  │
+│  │   Google Gemini API          │      │  Anthropic Claude API         │  │
+│  ├──────────────────────────────┤      ├───────────────────────────────┤  │
+│  │ https://aistudio.google.com  │      │ https://console.anthropic.com │  │
+│  │                              │      │                               │  │
+│  │ POST /generateContent        │      │ POST /v1/messages             │  │
+│  │ POST /generateContentStream  │      │ (with stream parameter)       │  │
+│  │                              │      │                               │  │
+│  │ Auth: API Key                │      │ Auth: API Key                 │  │
+│  │                              │      │                               │  │
+│  └──────────────────────────────┘      └───────────────────────────────┘  │
+│           ▲                                      ▲                          │
+│           │  HTTP/REST                          │  HTTP/REST               │
+│           │  +json (streaming)                  │  +sse (streaming)        │
+│           │                                      │                          │
+└───────────┴──────────────────────────────────────┴──────────────────────────┘
+            │                                      │
+            └──────────────┬───────────────────────┘
+                           │
+            ┌──────────────▼──────────────┐
+            │   Internet Connection       │
+            │   (Network Request/Response)│
+            └─────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          DATA FLOW (Request)                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. User types message in ChatPanel                                        │
+│     ↓                                                                       │
+│  2. onSendMessage() called                                                 │
+│     ↓                                                                       │
+│  3. Message added to chat state                                            │
+│     ↓                                                                       │
+│  4. UnifiedAIService.generateContentStream() called                        │
+│     ↓                                                                       │
+│  5. Determine current provider (Gemini or Claude)                         │
+│     ↓                                                                       │
+│  6. Call appropriate service:                                              │
+│     • GeminiService → @google/genai → Google API                          │
+│     • ClaudeService → Fetch API → Anthropic API                           │
+│     ↓                                                                       │
+│  7. Stream response chunks back to UI                                      │
+│     ↓                                                                       │
+│  8. onChunk callback updates ChatPanel in real-time                        │
+│     ↓                                                                       │
+│  9. Full response added to chat state                                      │
+│     ↓                                                                       │
+│  10. Message history updated with provider metadata                        │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          ERROR HANDLING FLOW                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Error Occurs (Network, Timeout, Invalid Key, etc.)                        │
+│     ↓                                                                       │
+│  Catch in Service Layer                                                    │
+│     ↓                                                                       │
+│  ErrorService.logError() called                                            │
+│     • Log to console (dev)                                                │
+│     • Log to storage (analytics)                                           │
+│     • Generate user-friendly message                                       │
+│     ↓                                                                       │
+│  ErrorNotificationContainer displays notification                          │
+│     • Shows error message to user                                          │
+│     • Auto-dismisses non-critical errors                                   │
+│     ↓                                                                       │
+│  If provider is unavailable:                                               │
+│     • Auto-switch to another provider                                      │
+│     • Retry operation automatically                                        │
+│     • Notify user of switch                                                │
+│     ↓                                                                       │
+│  If no providers available:                                                │
+│     • Show critical error                                                  │
+│     • Guide user to add API key                                            │
+│     • Link to documentation                                                │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       ENVIRONMENT VARIABLES                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  .env.local (Development)                                                  │
+│  ─────────────────────────────────────────────────────────────────────     │
+│  VITE_GEMINI_API_KEY=sk-xxx                    # Optional                 │
+│  VITE_CLAUDE_API_KEY=sk-ant-xxx                # Optional                 │
+│                                                                             │
+│  At least ONE must be configured                                           │
+│                                                                             │
+│  Build-time (Vite) → Client-side                                           │
+│  Both keys must be available at build time                                 │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+SYSTEM CHARACTERISTICS
+─────────────────────────────────────────────────────────────────────────────
+
+Auto-Detection Algorithm:
+  1. Check if GeminiService is initialized
+  2. Check if ClaudeService is initialized
+  3. If Claude available → use Claude as primary (better for code)
+  4. Else if Gemini available → use Gemini as primary (fastest)
+  5. Else → show "No providers configured" error
+
+Fallback Mechanism:
+  1. User selects unavailable provider → error shown
+  2. Provider becomes unavailable during use → auto-switch to another
+  3. Last provider in list is fallback
+  4. If all providers down → show error notification
+
+Retry Strategy (Both Services):
+  • Max Retries: 3
+  • Initial Delay: 1000ms
+  • Max Delay: 10,000ms
+  • Backoff Multiplier: 2x
+  • Total Max Time: ~13 seconds per request
+
+Security:
+  • API keys never logged except in error context
+  • Keys treated as sensitive environment variables
+  • No storage in localStorage
+  • No transmission to third-party services
+  • Secure HTTPS for all API calls
+
+Performance:
+  • Streaming responses for real-time feedback
+  • Debounced UI updates
+  • Memoized components to prevent re-renders
+  • Efficient error handling
+  • Minimal bundle size overhead (~20KB)

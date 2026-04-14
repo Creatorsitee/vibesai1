@@ -5,6 +5,8 @@ import { FileService } from './services/fileService';
 import { GeminiService } from './services/geminiService';
 import { getErrorService } from './services/errorService';
 import { getLoggingService } from './services/loggingService';
+import { getUnifiedAIService } from './services/unifiedAIService';
+import type { AIProvider } from './services/unifiedAIService';
 import { useEditorState } from './hooks/useEditorState';
 import { useProjectState } from './hooks/useProjectState';
 import { useChatState } from './hooks/useChatState';
@@ -17,6 +19,7 @@ import { EditorSettingsPanel } from './components/EditorSettingsPanel';
 import { ProjectSwitcher } from './components/ProjectSwitcher';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ErrorNotificationContainer } from './components/ErrorNotification';
+import { AIProviderSelector } from './components/AIProviderSelector';
 
 const AppRefactored: React.FC = () => {
   // Services
@@ -28,11 +31,12 @@ const AppRefactored: React.FC = () => {
   const editorState = useEditorState(projectState.getActiveProject()?.files ? Object.keys(projectState.getActiveProject()!.files)[0] || 'index.html' : 'index.html');
   const chatState = useChatState();
 
-  // AI Service
-  const [geminiService] = useState(() => {
-    const apiKey = (process.env as any).GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
-    return new GeminiService(apiKey ? { apiKey } : undefined);
-  });
+  // Unified AI Service (supports both Gemini and Claude)
+  const [aiService] = useState(() => getUnifiedAIService());
+  const [currentProvider, setCurrentProvider] = useState<AIProvider>(aiService.getCurrentProvider());
+  const [availableProviders, setAvailableProviders] = useState<AIProvider[]>(
+    aiService.getAvailableProviders()
+  );
 
   // UI State
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -104,30 +108,49 @@ const AppRefactored: React.FC = () => {
     }
   }, [activeProject, projectState, editorState]);
 
+  // Handle provider change
+  const handleProviderChange = useCallback((provider: AIProvider) => {
+    try {
+      aiService.setProvider(provider);
+      setCurrentProvider(provider);
+      loggingService.info('AppRefactored', `Switched to ${provider} provider`);
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      errorService.logError(err, { provider }, `Failed to switch to ${provider}`);
+      loggingService.error('AppRefactored', 'Error switching provider', { error: err.message });
+    }
+  }, [aiService, errorService, loggingService]);
+
   // Handle send message
   const handleSendMessage = useCallback(async (text: string) => {
-    if (!geminiService.isInitialized()) {
+    if (availableProviders.length === 0) {
       const errorLog = errorService.logError(
-        new Error('Gemini API not initialized'),
+        new Error('No AI providers initialized'),
         undefined,
-        'API Key not configured. Please set VITE_GEMINI_API_KEY in your environment.'
+        'No AI API keys configured. Please set VITE_GEMINI_API_KEY and/or VITE_CLAUDE_API_KEY in your environment.'
       );
       chatState.addMessage('assistant', errorLog.userMessage);
-      loggingService.warn('AppRefactored', 'Attempted to send message without API key');
+      loggingService.warn('AppRefactored', 'Attempted to send message without any AI provider');
       return;
     }
 
     chatState.setIsProcessing(true);
     chatState.addMessage('user', text);
-    loggingService.info('AppRefactored', 'User message sent', { textLength: text.length });
+    loggingService.info('AppRefactored', 'User message sent', { 
+      textLength: text.length, 
+      provider: currentProvider 
+    });
 
     try {
-      const newHistory = [...chatState.history, { role: 'user' as const, parts: [{ text }] }];
-      chatState.setHistory(newHistory);
+      // Convert to unified format
+      const aiHistory = chatState.history.map((msg) => ({
+        role: msg.role as 'user' | 'assistant',
+        content: msg.parts?.[0]?.text || '',
+      }));
 
       let fullResponse = '';
 
-      await geminiService.generateContentStream(newHistory, text, (chunk) => {
+      await aiService.generateContentStream(aiHistory, text, (chunk) => {
         fullResponse += chunk;
         chatState.updateLastMessage(fullResponse);
       });
@@ -135,17 +158,23 @@ const AppRefactored: React.FC = () => {
       const responseMessage = chatState.messages[chatState.messages.length - 1];
       if (responseMessage?.role === 'user') {
         chatState.addMessage('assistant', fullResponse);
-        loggingService.info('AppRefactored', 'AI response received', { responseLength: fullResponse.length });
+        loggingService.info('AppRefactored', 'AI response received', { 
+          responseLength: fullResponse.length,
+          provider: currentProvider
+        });
       }
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
-      const errorLog = errorService.logError(err, { userMessageLength: text.length });
+      const errorLog = errorService.logError(err, { 
+        userMessageLength: text.length,
+        provider: currentProvider 
+      });
       chatState.addMessage('assistant', errorLog.userMessage);
       loggingService.error('AppRefactored', 'Error in message handling', { error: err.message });
     } finally {
       chatState.setIsProcessing(false);
     }
-  }, [geminiService, chatState, errorService, loggingService]);
+  }, [aiService, chatState, errorService, loggingService, availableProviders, currentProvider]);
 
   // Handle export
   const handleExport = useCallback(async () => {
@@ -177,6 +206,13 @@ const AppRefactored: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* AI Provider Selector */}
+          <AIProviderSelector
+            currentProvider={currentProvider}
+            availableProviders={availableProviders}
+            onProviderChange={handleProviderChange}
+          />
+
           {/* Mode selector */}
           <select
             value={editorState.editorMode}
@@ -304,6 +340,7 @@ const AppRefactored: React.FC = () => {
             </Panel>
           </PanelGroup>
         )}
+      </div>
       </div>
 
       {/* Settings Panel */}
