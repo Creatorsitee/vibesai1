@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { PanelGroup, Panel, PanelResizer } from 'react-resizable-panels';
+import { Group as PanelGroup, Panel, Separator as PanelSeparator } from 'react-resizable-panels';
 import { Menu, Moon, Sun, Settings, FolderPlus, Download, Upload } from 'lucide-react';
 import { FileService } from './services/fileService';
 import { GeminiService } from './services/geminiService';
@@ -266,7 +266,7 @@ const AppRefactored: React.FC = () => {
                     onFileDelete={handleFileDelete}
                   />
                 </Panel>
-                <PanelResizer />
+                <PanelSeparator />
               </>
             )}
             <Panel>
@@ -302,7 +302,7 @@ const AppRefactored: React.FC = () => {
                     onFileDelete={handleFileDelete}
                   />
                 </Panel>
-                <PanelResizer />
+                <PanelSeparator />
               </>
             )}
             <Panel defaultSize={35} minSize={20}>
@@ -319,7 +319,7 @@ const AppRefactored: React.FC = () => {
                     minimap={editorState.minimap}
                   />
                 </Panel>
-                <PanelResizer />
+                <PanelSeparator />
                 <Panel>
                   <ChatPanel
                     messages={chatState.messages}
@@ -330,7 +330,7 @@ const AppRefactored: React.FC = () => {
                 </Panel>
               </PanelGroup>
             </Panel>
-            <PanelResizer />
+            <PanelSeparator />
             <Panel defaultSize={50} minSize={30}>
               <LivePreview
                 files={activeProject.files}
