@@ -1,8 +1,10 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { PanelGroup, Panel, PanelResizer } from 'react-resizable-panels';
 import { Menu, Moon, Sun, Settings, FolderPlus, Download, Upload } from 'lucide-react';
 import { FileService } from './services/fileService';
 import { GeminiService } from './services/geminiService';
+import { getErrorService } from './services/errorService';
+import { getLoggingService } from './services/loggingService';
 import { useEditorState } from './hooks/useEditorState';
 import { useProjectState } from './hooks/useProjectState';
 import { useChatState } from './hooks/useChatState';
@@ -13,8 +15,14 @@ import { LivePreview } from './components/LivePreview';
 import { ChatPanel } from './components/ChatPanel';
 import { EditorSettingsPanel } from './components/EditorSettingsPanel';
 import { ProjectSwitcher } from './components/ProjectSwitcher';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { ErrorNotificationContainer } from './components/ErrorNotification';
 
 const AppRefactored: React.FC = () => {
+  // Services
+  const errorService = getErrorService();
+  const loggingService = getLoggingService();
+
   // State Management
   const projectState = useProjectState();
   const editorState = useEditorState(projectState.getActiveProject()?.files ? Object.keys(projectState.getActiveProject()!.files)[0] || 'index.html' : 'index.html');
@@ -30,6 +38,20 @@ const AppRefactored: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [showProjectSwitcher, setShowProjectSwitcher] = useState(false);
+  const [lastError, setLastError] = useState<string | null>(null);
+
+  // Setup error listener
+  useEffect(() => {
+    const unsubscribe = errorService.onError((errorLog) => {
+      setLastError(errorLog.userMessage);
+      loggingService.error('AppRefactored', errorLog.message, {
+        errorId: errorLog.id,
+        context: errorLog.context,
+      });
+    });
+
+    return unsubscribe;
+  }, [errorService, loggingService]);
 
   // Get active project
   const activeProject = projectState.getActiveProject();
@@ -85,12 +107,19 @@ const AppRefactored: React.FC = () => {
   // Handle send message
   const handleSendMessage = useCallback(async (text: string) => {
     if (!geminiService.isInitialized()) {
-      chatState.addMessage('assistant', 'API Key not configured. Please set GEMINI_API_KEY in .env.local');
+      const errorLog = errorService.logError(
+        new Error('Gemini API not initialized'),
+        undefined,
+        'API Key not configured. Please set VITE_GEMINI_API_KEY in your environment.'
+      );
+      chatState.addMessage('assistant', errorLog.userMessage);
+      loggingService.warn('AppRefactored', 'Attempted to send message without API key');
       return;
     }
 
     chatState.setIsProcessing(true);
     chatState.addMessage('user', text);
+    loggingService.info('AppRefactored', 'User message sent', { textLength: text.length });
 
     try {
       const newHistory = [...chatState.history, { role: 'user' as const, parts: [{ text }] }];
@@ -106,14 +135,17 @@ const AppRefactored: React.FC = () => {
       const responseMessage = chatState.messages[chatState.messages.length - 1];
       if (responseMessage?.role === 'user') {
         chatState.addMessage('assistant', fullResponse);
+        loggingService.info('AppRefactored', 'AI response received', { responseLength: fullResponse.length });
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'An error occurred';
-      chatState.addMessage('assistant', `Error: ${errorMessage}`);
+      const err = error instanceof Error ? error : new Error(String(error));
+      const errorLog = errorService.logError(err, { userMessageLength: text.length });
+      chatState.addMessage('assistant', errorLog.userMessage);
+      loggingService.error('AppRefactored', 'Error in message handling', { error: err.message });
     } finally {
       chatState.setIsProcessing(false);
     }
-  }, [geminiService, chatState]);
+  }, [geminiService, chatState, errorService, loggingService]);
 
   // Handle export
   const handleExport = useCallback(async () => {
@@ -124,7 +156,8 @@ const AppRefactored: React.FC = () => {
   const currentFileContent = activeProject.files[editorState.activeFile] || '';
 
   return (
-    <div className={`h-screen flex flex-col ${editorState.theme === 'dark' ? 'dark' : ''} bg-white dark:bg-zinc-950 text-zinc-900 dark:text-white`}>
+    <ErrorBoundary>
+      <div className={`h-screen flex flex-col ${editorState.theme === 'dark' ? 'dark' : ''} bg-white dark:bg-zinc-950 text-zinc-900 dark:text-white`}>
       {/* Header */}
       <header className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -292,7 +325,10 @@ const AppRefactored: React.FC = () => {
         isOpen={showProjectSwitcher}
         onClose={() => setShowProjectSwitcher(false)}
       />
-    </div>
+
+      {/* Error Notification Container */}
+      <ErrorNotificationContainer maxNotifications={3} />
+    </ErrorBoundary>
   );
 };
 
