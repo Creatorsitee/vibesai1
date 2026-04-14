@@ -1,0 +1,306 @@
+
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                    VIBESAI STUDIO - SYSTEM ARCHITECTURE                       ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+
+
+                          ┌─────────────────────┐
+                          │   Browser/Client    │
+                          │  (React 19 + Vite)  │
+                          └──────────┬──────────┘
+                                     │
+                                     ▼
+                    ┌────────────────────────────────┐
+                    │     AppRefactored.tsx           │
+                    │  (Main App Container)           │
+                    └────────────┬───────────────────┘
+                                 │
+                ┌────────────────┼────────────────┐
+                │                │                │
+                ▼                ▼                ▼
+         ┌──────────────┐ ┌──────────────┐ ┌────────────────┐
+         │  Components  │ │  Services    │ │  State Hooks   │
+         ├──────────────┤ ├──────────────┤ ├────────────────┤
+         │• EnhancedEd..│ │• GeminiServ..│ │• useProjectSt..│
+         │• LivePreview │ │• ErrorServ.. │ │• useEditorSta..│
+         │• ChatPanel   │ │• LoggingServ.│ │• useChatState  │
+         │• FileExplore │ │• FileService │ │• useUndoRedo   │
+         │• ErrorBound. │ │• StorageServ.│ │• useDebounced..│
+         │• ErrorNotifi │ │• SearchRepl..│ │• usePaginated..│
+         │• LoadingSpinn│ │• Performance │ │• usePersistent │
+         │• TypingIndic │ └──────────────┘ └────────────────┘
+         └──────────────┘
+
+
+═══════════════════════════════════════════════════════════════════════════════
+COMPONENT HIERARCHY
+═══════════════════════════════════════════════════════════════════════════════
+
+AppRefactored
+├── ErrorBoundary
+│   ├── Header
+│   │   ├── Sidebar Toggle
+│   │   ├── Project Switcher
+│   │   ├── Editor Mode Selector
+│   │   ├── Export Button
+│   │   ├── Theme Toggle
+│   │   └── Settings Button
+│   ├── Main Content Area
+│   │   ├── FileExplorer (if sidebar open)
+│   │   ├── PanelGroup (resizable)
+│   │   │   ├── EnhancedCodeEditor
+│   │   │   ├── PanelSeparator
+│   │   │   ├── ChatPanel
+│   │   │   ├── PanelSeparator
+│   │   │   └── LivePreview
+│   │   └── (OR alternative layouts based on editorMode)
+│   ├── Settings Panel (conditional)
+│   ├── Project Switcher (conditional)
+│   └── ErrorNotificationContainer
+└── (Various modals and overlays)
+
+
+═══════════════════════════════════════════════════════════════════════════════
+DATA FLOW
+═══════════════════════════════════════════════════════════════════════════════
+
+User Input
+    │
+    ├─→ Editor Content
+    │   └─→ FileService
+    │       └─→ ProjectState (files store)
+    │           └─→ LivePreview (re-render)
+    │
+    ├─→ Chat Message
+    │   └─→ GeminiService
+    │       └─→ generateContentStream()
+    │           └─→ ChatState (add message)
+    │               └─→ ChatPanel (display)
+    │
+    └─→ File Operations
+        └─→ ProjectState
+            ├─→ Create/Edit/Delete
+            └─→ FileExplorer (update tree)
+
+
+═══════════════════════════════════════════════════════════════════════════════
+SERVICE ARCHITECTURE
+═══════════════════════════════════════════════════════════════════════════════
+
+┌────────────────────────────────────────────────────────────────┐
+│                    ERROR HANDLING LAYER                         │
+├────────────────────────────────────────────────────────────────┤
+│ ┌──────────────┐  ┌──────────────┐  ┌──────────────┐           │
+│ │ ErrorService │  │ LoggingServ.. │  │ ErrorBoundary│           │
+│ └──────────────┘  └──────────────┘  └──────────────┘           │
+└────────────────────────────────────────────────────────────────┘
+                              ▲
+                              │ Error Events
+                              │
+┌────────────────────────────────────────────────────────────────┐
+│                    BUSINESS LOGIC LAYER                         │
+├────────────────────────────────────────────────────────────────┤
+│ ┌──────────────┐  ┌──────────────┐  ┌──────────────┐           │
+│ │ GeminiServ.. │  │ FileService  │  │StorageServ.. │           │
+│ │ • Generate   │  │ • Build Tree │  │ • Save Data  │           │
+│ │ • Stream     │  │ • Export ZIP │  │ • Load Data  │           │
+│ │ • Analyze    │  │ • Operations │  │ • IndexedDB  │           │
+│ └──────────────┘  └──────────────┘  └──────────────┘           │
+│                                                                   │
+│ ┌──────────────┐  ┌──────────────┐  ┌──────────────┐           │
+│ │Performance.. │  │SearchReplace │  │    Other     │           │
+│ │ • Debounce  │  │ • Find/Replace│  │   Services   │           │
+│ │ • Throttle  │  │ • Regex       │  └──────────────┘           │
+│ │ • Optimize  │  │ • Context     │                              │
+│ └──────────────┘  └──────────────┘                              │
+└────────────────────────────────────────────────────────────────┘
+                              ▲
+                              │ Service Calls
+                              │
+┌────────────────────────────────────────────────────────────────┐
+│                     STATE MANAGEMENT LAYER                      │
+├────────────────────────────────────────────────────────────────┤
+│ ┌──────────────────────────────────────────────────────────┐   │
+│ │                   Custom Hooks                             │   │
+│ │ ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │   │
+│ │ │useProjectSt. │  │useEditorStat.│  │useChatState  │    │   │
+│ │ │ • Projects   │  │ • Settings   │  │ • Messages   │    │   │
+│ │ │ • Files      │  │ • Theme      │  │ • History    │    │   │
+│ │ │ • Active ID  │  │ • Font size  │  │ • Processing │    │   │
+│ │ └──────────────┘  └──────────────┘  └──────────────┘    │   │
+│ │                                                             │   │
+│ │ ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │   │
+│ │ │useUndoRedo   │  │useDebouncedS.│  │usePersistent │    │   │
+│ │ │ • History    │  │ • Delayed    │  │ • LocalStore │    │   │
+│ │ │ • Undo/Redo  │  │   Updates    │  │ • Restore    │    │   │
+│ │ │ • Stack mgmt │  │ • Debounce   │  │ • Sync tabs  │    │   │
+│ │ └──────────────┘  └──────────────┘  └──────────────┘    │   │
+│ └──────────────────────────────────────────────────────────┘   │
+└────────────────────────────────────────────────────────────────┘
+                              ▲
+                              │ State Updates
+                              │
+┌────────────────────────────────────────────────────────────────┐
+│                       UI LAYER (React)                          │
+├────────────────────────────────────────────────────────────────┤
+│ Components render UI and dispatch state updates                │
+└────────────────────────────────────────────────────────────────┘
+
+
+═══════════════════════════════════════════════════════════════════════════════
+REQUEST/RESPONSE CYCLE (EXAMPLE: CHAT MESSAGE)
+═══════════════════════════════════════════════════════════════════════════════
+
+User Types Message
+        │
+        ▼
+ChatPanel Component
+        │
+        ▼
+onSendMessage Callback
+        │
+        ├─→ Validation: Check API key initialized
+        │
+        ├─→ Update State: addMessage('user', text)
+        │
+        ├─→ Show Loading: setIsProcessing(true)
+        │
+        ▼
+GeminiService.generateContentStream()
+        │
+        ├─→ Retry Logic: with exponential backoff
+        │
+        ├─→ Timeout: 30 seconds max
+        │
+        ├─→ Fetch: Send to Gemini API
+        │
+        ├─→ Stream: Receive chunks
+        │
+        ▼
+Chunk Handler: onChunk()
+        │
+        ├─→ Update State: updateLastMessage(fullText)
+        │
+        ▼
+ChatPanel Re-renders
+        │
+        ├─→ Display: New message appears
+        │
+        ├─→ Scroll: Auto-scroll to bottom
+        │
+        ▼
+User Sees Response
+
+
+═══════════════════════════════════════════════════════════════════════════════
+STYLING SYSTEM
+═══════════════════════════════════════════════════════════════════════════════
+
+theme.css (CSS Variables)
+    │
+    ├─→ Colors
+    │   ├─→ Primary (blue)
+    │   ├─→ Neutral (gray)
+    │   ├─→ Semantic (success, warning, error)
+    │   └─→ Gradients
+    │
+    ├─→ Typography
+    │   ├─→ Font families
+    │   ├─→ Font sizes
+    │   └─→ Line heights
+    │
+    ├─→ Spacing
+    │   ├─→ Margins
+    │   ├─→ Paddings
+    │   └─→ Gaps
+    │
+    ├─→ Shadows
+    │   ├─→ Small
+    │   ├─→ Medium
+    │   ├─→ Large
+    │   └─→ Extra Large
+    │
+    └─→ Animations
+        ├─→ Fade in
+        ├─→ Slide in
+        └─→ Pulse
+
+
+═══════════════════════════════════════════════════════════════════════════════
+DEPLOYMENT ARCHITECTURE
+═══════════════════════════════════════════════════════════════════════════════
+
+Source Code (GitHub)
+        │
+        ▼
+Build Process (Vite)
+        │
+        ├─→ Bundle JS/CSS
+        ├─→ Optimize assets
+        ├─→ Generate HTML
+        │
+        ▼
+Dist Folder
+        │
+        ├─→ index.html
+        ├─→ assets/
+        │   ├─→ *.js
+        │   ├─→ *.css
+        │   └─→ *.woff2
+        │
+        ▼
+Deploy to CDN (Vercel/Netlify)
+        │
+        ▼
+User Browser
+        │
+        ├─→ Download HTML
+        ├─→ Load JS/CSS
+        ├─→ Execute React app
+        │
+        ▼
+VibesAI Studio Running
+
+
+═══════════════════════════════════════════════════════════════════════════════
+SECURITY LAYERS
+═══════════════════════════════════════════════════════════════════════════════
+
+┌──────────────────────────────────────────────┐
+│ Browser Security (Built-in)                   │
+│ • XSS Protection                              │
+│ • CORS Policy                                 │
+│ • Content Security Policy                     │
+└──────────────────────────────────────────────┘
+            │
+            ▼
+┌──────────────────────────────────────────────┐
+│ React Security                                │
+│ • Auto-escapes JSX                            │
+│ • Input validation                            │
+│ • Event sanitization                          │
+└──────────────────────────────────────────────┘
+            │
+            ▼
+┌──────────────────────────────────────────────┐
+│ Application Layer Security                    │
+│ • Error Service (hides sensitive data)        │
+│ • Input validation                            │
+│ • Safe logging (no credentials)               │
+│ • Secure storage                              │
+└──────────────────────────────────────────────┘
+            │
+            ▼
+┌──────────────────────────────────────────────┐
+│ API Security (Gemini)                         │
+│ • API Key validation                          │
+│ • HTTPS only                                  │
+│ • Rate limiting                               │
+│ • OAuth 2.0                                   │
+└──────────────────────────────────────────────┘
+
+
+═══════════════════════════════════════════════════════════════════════════════
+
+This is a professional, production-ready AI Studio architecture! 🚀
+
